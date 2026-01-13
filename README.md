@@ -4,7 +4,7 @@ Protect your builds on Hytale servers! Claim land, see it on your map, and share
 
 ## Quick Start
 
-1. **Install**: Drop `EasyClaims-1.0.0.jar` into your server's `mods/` folder
+1. **Install**: Download the [latest release](../../releases/latest) and drop the JAR into your server's `mods/` folder
 2. **Restart** your server
 3. **Claim land**: Stand where you want to protect and type `/easyclaims claim`
 4. **See your claims**: Open your map (M) - claimed chunks show in color!
@@ -113,7 +113,7 @@ Use `/easyclaims playtime` to check your progress!
 
 ### For Server Owners
 
-1. Download `EasyClaims-1.0.0.jar`
+1. Download the latest JAR from [Releases](../../releases/latest)
 2. Place it in your server's `mods/` folder
 3. Restart the server
 4. Config files appear in `mods/Community_EasyClaims/`
@@ -215,7 +215,7 @@ Requires Java 25+ and Maven:
 mvn clean package
 ```
 
-Output: `target/EasyClaims-1.0.0.jar`
+Output: `target/EasyClaims-*.jar`
 
 ---
 
