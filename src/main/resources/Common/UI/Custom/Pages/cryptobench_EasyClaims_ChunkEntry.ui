@@ -1,0 +1,16 @@
+$C = "../Common.ui";
+TextButton {
+  Anchor: (Width: 32, Height: 32);
+  Background: (Color: #00aa0022);
+  Padding: (Left: 12, Right: 6, Top: 6, Bottom: 6);
+  TextTooltipShowDelay: 0.1;
+  Style: TextButtonStyle(
+    Default: (
+      LabelStyle: (
+        FontSize: 14,
+        TextColor: #ffffffff
+      )
+    ),
+    Sounds: $C.@ButtonSounds
+  );
+}

@@ -1,0 +1,172 @@
+$C = "../Common.ui";
+
+$C.@PageOverlay {
+
+  $C.@Container {
+    Anchor: (Width: 1050, Height: 700);
+
+    #Title {
+      Group {
+        $C.@Title {
+          @Text = "Claim Settings";
+        }
+
+
+      }
+    }
+
+    #Content {
+      LayoutMode: Left;
+
+      Group #ClaimInfo {
+        FlexWeight: 1;
+        LayoutMode: Top;
+        Padding: (Left: 10);
+        ScrollbarStyle: $C.@DefaultScrollbarStyle;
+
+        // Add Trusted Player
+
+        Label #AddTrustLabel {
+          Text: "Add Trusted Player";
+          Style: (
+            RenderUppercase: true,
+            RenderBold: true,
+            FontSize: 17
+          );
+          Anchor: (Bottom: 5);
+        }
+
+        Group {
+
+          LayoutMode: Left;
+
+          $C.@TextField #PlayerNameField {
+            Anchor: (Bottom: 10, Height: 38);
+            Style: (
+              FontSize: 13,
+              TextColor: #ffffff(0.85)
+            );
+            FlexWeight: 1;
+          }
+
+          $C.@TextButton #AddButton {
+            Text: "Add";
+            Padding: (Left: 16, Right: 16, Top: 6, Bottom: 6);
+            Anchor: (Left: 10);
+            Overscroll: false;
+          }
+        }
+
+
+
+        Label #StatusMessage {
+          Text: "";
+          Style: (
+            FontSize: 14,
+            TextColor: #ff5555
+          );
+          Anchor: (Bottom: 8);
+        }
+
+        Group #Separator{
+          Anchor: (Width: 300, Top: 6);
+          OutlineColor: #93844c;
+          OutlineSize: 0.5;
+        }
+
+        // Trusted Player Permissions
+        Label #SettingsLabel {
+          Text: "Trusted Player Permissions";
+          Style: (
+            RenderUppercase: true,
+            RenderBold: true,
+            FontSize: 17
+          );
+          Anchor: (Bottom: 5);
+        }
+
+        Group #TrustSettings {
+          LayoutMode: Left;
+          Anchor: (Bottom: 10);
+
+          $C.@CheckBoxWithLabel #UseBlocksSetting {
+            @Text = "Use (Doors/Buttons)";
+            Padding: (Bottom: 4);
+          }
+
+          $C.@CheckBoxWithLabel #ContainerSetting {
+            @Text = "Container (Chests)";
+            Padding: (Bottom: 4);
+          }
+
+          $C.@CheckBoxWithLabel #WorkstationSetting {
+            @Text = "Workstation (Crafting)";
+            Padding: (Bottom: 4);
+          }
+
+          $C.@CheckBoxWithLabel #BuildSetting {
+            @Text = "Build (Break/Place)";
+            Padding: (Bottom: 4);
+          }
+        }
+
+       Group #Separator2{
+          Anchor: (Width: 300, Top: 6);
+          OutlineColor: #93844c;
+          OutlineSize: 0.5;
+        }
+
+
+        Group {
+          LayoutMode: Left;
+
+          // Trusted Players List
+          Group {
+            FlexWeight: 1;
+            LayoutMode: Top;
+
+            Label #TrustedPlayersLabel {
+              Text: "Trusted Players";
+              Style: (
+              RenderUppercase: true,
+              RenderBold: true,
+              FontSize: 17
+              );
+            Anchor: (Bottom: 5);
+          }
+
+          Group #TrustedPlayers {
+            LayoutMode: TopScrolling;
+            Anchor: (Bottom: 10, Height: 330);
+            ScrollbarStyle: $C.@DefaultScrollbarStyle;
+
+            Group #TrustedEntries {
+              LayoutMode: Top;
+            }
+          }
+
+        }
+        }
+
+
+
+
+        Label {FlexWeight: 1;}
+
+        Group #InteractionButtons {
+          LayoutMode: Right;
+          Anchor: (Bottom: 10);
+
+          $C.@CancelTextButton #CloseButton {
+            Text: "Close";
+            Padding: (Left: 12, Right: 12, Top: 6, Bottom: 6);
+            Anchor: (Right: 10);
+            Overscroll: false;
+          }
+        }
+      }
+    }
+  }
+}
+
+$C.@BackButton {}

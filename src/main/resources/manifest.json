@@ -7,5 +7,6 @@
     "Authors": [],
     "Website": "",
     "Dependencies": {},
-    "OptionalDependencies": {}
+    "OptionalDependencies": {},
+    "IncludesAssetPack": true
 }

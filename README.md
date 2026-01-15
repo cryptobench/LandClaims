@@ -18,6 +18,7 @@ That's it! Your builds are now protected.
 ## Features
 
 - **Visual Map Integration** - Claimed chunks appear colored on the world map
+- **In-Game GUI** - Manage claims and trusted players through easy-to-use interfaces
 - **Playtime Rewards** - Play longer, claim more land
 - **Share With Friends** - Trust players with different permission levels
 - **Full Protection** - Blocks breaking, placing, and interactions from strangers
@@ -28,6 +29,13 @@ That's it! Your builds are now protected.
 ## Commands
 
 All commands use `/easyclaims`.
+
+### GUI Commands
+
+| Command | What it does |
+|---------|--------------|
+| `/easyclaims gui` | Open the claim map GUI (see and manage claims visually) |
+| `/easyclaims settings` | Open settings GUI to manage trusted players |
 
 ### Essential Commands
 
@@ -48,6 +56,8 @@ All commands use `/easyclaims`.
 | `/easyclaims untrust PlayerName` | Remove a player's access |
 | `/easyclaims trustlist` | See who you've trusted |
 
+**Tip:** Use `/easyclaims settings` for an easier way to manage trusted players with a GUI!
+
 ### Other Commands
 
 | Command | What it does |
@@ -59,6 +69,7 @@ All commands use `/easyclaims`.
 
 | Command | What it does |
 |---------|--------------|
+| `/easyclaims admin gui` | Open claim manager GUI (admin mode) |
 | `/easyclaims admin config` | Show current settings |
 | `/easyclaims admin set <key> <value>` | Change a setting (saves immediately) |
 | `/easyclaims admin reload` | Reload config from file |

@@ -7,6 +7,7 @@ import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.NameMatching;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
+import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.Universe;
@@ -14,6 +15,8 @@ import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.math.util.ChunkUtil;
 import com.easyclaims.EasyClaims;
+import com.easyclaims.gui.ChunkVisualizerGui;
+import com.easyclaims.gui.ClaimSettingsGui;
 import com.easyclaims.config.PluginConfig;
 import com.easyclaims.data.Claim;
 import com.easyclaims.data.PlayerClaims;
@@ -33,6 +36,8 @@ import java.util.UUID;
  * All functionality is accessed through /easyclaims <subcommand>
  *
  * Subcommands:
+ *   gui                      - Open chunk visualizer GUI
+ *   settings                 - Manage trusted players GUI
  *   claim                    - Claim current chunk
  *   unclaim                  - Unclaim current chunk
  *   unclaimall               - Unclaim all your chunks
@@ -45,6 +50,7 @@ import java.util.UUID;
  *   admin config             - Show config (admin)
  *   admin set <key> <value>  - Change config (admin)
  *   admin reload             - Reload config (admin)
+ *   admin gui                - Open admin chunk visualizer
  */
 public class EasyClaimsCommand extends AbstractPlayerCommand {
     private final EasyClaims plugin;
@@ -98,6 +104,13 @@ public class EasyClaimsCommand extends AbstractPlayerCommand {
         String arg2 = args.length > 2 ? args[2] : null;
 
         switch (subcommand.toLowerCase()) {
+            case "gui":
+            case "map":
+                handleGui(playerData, store, playerRef, world, false);
+                break;
+            case "settings":
+                handleSettings(playerData, store, playerRef, world);
+                break;
             case "claim":
                 handleClaim(playerData, store, playerRef, world);
                 break;
@@ -164,6 +177,10 @@ public class EasyClaimsCommand extends AbstractPlayerCommand {
             case "unclaim":
                 handleAdminUnclaim(playerData, arg1, store, playerRef, world);
                 break;
+            case "gui":
+            case "map":
+                handleGui(playerData, store, playerRef, world, true);
+                break;
             default:
                 playerData.sendMessage(Message.raw("Unknown admin command: " + adminSubcmd).color(RED));
                 showAdminHelp(playerData);
@@ -172,6 +189,7 @@ public class EasyClaimsCommand extends AbstractPlayerCommand {
 
     private void showAdminHelp(PlayerRef playerData) {
         playerData.sendMessage(Message.raw("=== EasyClaims Admin Commands ===").color(GOLD));
+        playerData.sendMessage(Message.raw("/easyclaims admin gui - Open claim manager (admin mode)").color(GRAY));
         playerData.sendMessage(Message.raw("/easyclaims admin config - Show current settings").color(GRAY));
         playerData.sendMessage(Message.raw("/easyclaims admin set <key> <value> - Change a setting").color(GRAY));
         playerData.sendMessage(Message.raw("/easyclaims admin reload - Reload config from file").color(GRAY));
@@ -179,6 +197,51 @@ public class EasyClaimsCommand extends AbstractPlayerCommand {
         playerData.sendMessage(Message.raw("/easyclaims admin unclaim <player> - Remove all claims from player").color(GRAY));
         playerData.sendMessage(Message.raw("").color(GRAY));
         playerData.sendMessage(Message.raw("Settings: starting, perhour, max, buffer").color(AQUA));
+    }
+
+    // ===== GUI =====
+    private void handleGui(PlayerRef playerData, Store<EntityStore> store, Ref<EntityStore> playerRef, World world, boolean isAdmin) {
+        Player player = store.getComponent(playerRef, Player.getComponentType());
+        if (player == null) return;
+
+        TransformComponent transform = store.getComponent(playerRef, TransformComponent.getComponentType());
+        Vector3d position = transform.getPosition();
+
+        int chunkX = ChunkUtil.chunkCoordinate((int) position.getX());
+        int chunkZ = ChunkUtil.chunkCoordinate((int) position.getZ());
+
+        // Open the GUI on the world thread
+        world.execute(() -> {
+            player.getPageManager().openCustomPage(playerRef, store,
+                    new ChunkVisualizerGui(
+                            playerData,
+                            world.getName(),
+                            chunkX,
+                            chunkZ,
+                            plugin.getClaimManager(),
+                            plugin.getClaimStorage(),
+                            isAdmin,
+                            (worldName) -> plugin.refreshWorldMap(worldName)
+                    )
+            );
+        });
+    }
+
+    // ===== SETTINGS =====
+    private void handleSettings(PlayerRef playerData, Store<EntityStore> store, Ref<EntityStore> playerRef, World world) {
+        Player player = store.getComponent(playerRef, Player.getComponentType());
+        if (player == null) return;
+
+        // Open the settings GUI on the world thread
+        world.execute(() -> {
+            player.getPageManager().openCustomPage(playerRef, store,
+                    new ClaimSettingsGui(
+                            playerData,
+                            plugin.getClaimManager(),
+                            plugin.getPlaytimeManager()
+                    )
+            );
+        });
     }
 
     // ===== CLAIM =====
@@ -412,6 +475,8 @@ public class EasyClaimsCommand extends AbstractPlayerCommand {
     // ===== HELP =====
     private void showHelp(PlayerRef playerData) {
         playerData.sendMessage(Message.raw("=== EasyClaims Commands ===").color(GOLD));
+        playerData.sendMessage(Message.raw("/easyclaims gui - Open claim manager").color(GRAY));
+        playerData.sendMessage(Message.raw("/easyclaims settings - Manage trusted players").color(GRAY));
         playerData.sendMessage(Message.raw("/easyclaims claim - Claim current chunk").color(GRAY));
         playerData.sendMessage(Message.raw("/easyclaims unclaim - Unclaim current chunk").color(GRAY));
         playerData.sendMessage(Message.raw("/easyclaims unclaimall - Remove all claims").color(GRAY));
