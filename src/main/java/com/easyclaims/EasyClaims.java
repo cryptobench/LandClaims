@@ -14,6 +14,7 @@ import com.easyclaims.systems.BlockBreakProtectionSystem;
 import com.easyclaims.systems.BlockDamageProtectionSystem;
 import com.easyclaims.systems.BlockPlaceProtectionSystem;
 import com.easyclaims.systems.BlockUseProtectionSystem;
+import com.easyclaims.systems.ClaimTitleSystem;
 import com.hypixel.hytale.server.core.event.events.player.PlayerConnectEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerDisconnectEvent;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
@@ -49,6 +50,7 @@ public class EasyClaims extends JavaPlugin {
     private PlaytimeManager playtimeManager;
     private ClaimProtectionListener protectionListener;
     private ClaimMapOverlayProvider mapOverlayProvider;
+    private ClaimTitleSystem claimTitleSystem;
 
     // Track registered worlds for map provider
     public static final Map<String, World> WORLDS = new HashMap<>();
@@ -110,6 +112,11 @@ public class EasyClaims extends JavaPlugin {
             getEntityStoreRegistry().registerSystem(new BlockBreakProtectionSystem(claimManager, getLogger()));
             getEntityStoreRegistry().registerSystem(new BlockPlaceProtectionSystem(claimManager, getLogger()));
             getEntityStoreRegistry().registerSystem(new BlockUseProtectionSystem(claimManager, getLogger()));
+
+            // Register claim title system (shows banner when entering/leaving claims)
+            claimTitleSystem = new ClaimTitleSystem(claimStorage);
+            getEntityStoreRegistry().registerSystem(claimTitleSystem);
+
             getLogger().atInfo().log("All ECS systems registered successfully!");
         } catch (Exception e) {
             getLogger().atSevere().withCause(e).log("ERROR registering ECS systems");
@@ -304,6 +311,11 @@ public class EasyClaims extends JavaPlugin {
                 // Clear map overlay cache for this player
                 if (mapOverlayProvider != null) {
                     mapOverlayProvider.clearPlayerCache(playerId);
+                }
+
+                // Clear title tracking for this player
+                if (claimTitleSystem != null) {
+                    claimTitleSystem.removePlayer(playerId);
                 }
 
                 getLogger().atFine().log("Player disconnected: %s", playerId);
