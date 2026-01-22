@@ -25,6 +25,7 @@ public class UnclaimSubcommand extends AbstractPlayerCommand {
     public UnclaimSubcommand(EasyClaims plugin) {
         super("unclaim", "Unclaim the chunk you're standing in");
         this.plugin = plugin;
+        requirePermission("easyclaims.use");
     }
 
     @Override

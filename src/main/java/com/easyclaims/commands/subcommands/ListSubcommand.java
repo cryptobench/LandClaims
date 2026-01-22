@@ -28,6 +28,7 @@ public class ListSubcommand extends AbstractPlayerCommand {
         super("list", "List all your claimed chunks");
         this.plugin = plugin;
         addAliases("claims");
+        requirePermission("easyclaims.use");
     }
 
     @Override

@@ -27,6 +27,7 @@ public class TrustListSubcommand extends AbstractPlayerCommand {
     public TrustListSubcommand(EasyClaims plugin) {
         super("trustlist", "List all players you've trusted");
         this.plugin = plugin;
+        requirePermission("easyclaims.use");
     }
 
     @Override

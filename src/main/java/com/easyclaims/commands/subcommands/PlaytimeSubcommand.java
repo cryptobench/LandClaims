@@ -28,6 +28,7 @@ public class PlaytimeSubcommand extends AbstractPlayerCommand {
         super("playtime", "Show your playtime and claim slots");
         this.plugin = plugin;
         addAliases("stats");
+        requirePermission("easyclaims.use");
     }
 
     @Override

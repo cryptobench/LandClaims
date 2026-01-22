@@ -22,6 +22,7 @@ public class UnclaimAllSubcommand extends AbstractPlayerCommand {
     public UnclaimAllSubcommand(EasyClaims plugin) {
         super("unclaimall", "Remove all of your claims");
         this.plugin = plugin;
+        requirePermission("easyclaims.use");
     }
 
     @Override

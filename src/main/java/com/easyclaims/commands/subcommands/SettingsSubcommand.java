@@ -19,6 +19,7 @@ public class SettingsSubcommand extends AbstractPlayerCommand {
     public SettingsSubcommand(EasyClaims plugin) {
         super("settings", "Manage your trusted players");
         this.plugin = plugin;
+        requirePermission("easyclaims.use");
     }
 
     @Override

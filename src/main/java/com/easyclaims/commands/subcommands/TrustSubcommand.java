@@ -33,6 +33,7 @@ public class TrustSubcommand extends AbstractPlayerCommand {
         this.plugin = plugin;
         this.playerArg = withOptionalArg("player", "Player name to trust", ArgTypes.STRING);
         this.levelArg = withOptionalArg("level", "Trust level (use/container/workstation/build)", ArgTypes.STRING);
+        requirePermission("easyclaims.use");
     }
 
     @Override

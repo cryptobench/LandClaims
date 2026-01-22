@@ -34,6 +34,7 @@ public class UntrustSubcommand extends AbstractPlayerCommand {
         super("untrust", "Remove trust from a player");
         this.plugin = plugin;
         this.playerArg = withOptionalArg("player", "Player name to untrust", ArgTypes.STRING);
+        requirePermission("easyclaims.use");
     }
 
     @Override

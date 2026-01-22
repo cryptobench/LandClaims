@@ -23,6 +23,7 @@ public class GuiSubcommand extends AbstractPlayerCommand {
         super("gui", "Open the visual claim manager");
         this.plugin = plugin;
         addAliases("map");
+        requirePermission("easyclaims.use");
     }
 
     @Override
