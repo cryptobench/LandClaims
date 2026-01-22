@@ -81,21 +81,22 @@ public class ClaimMapOverlayProvider implements WorldMapManager.MarkerProvider {
                 return;
             }
 
-            // Collect claims that need markers
+            // Collect claims that need markers - iterate claims (sparse) instead of area (dense)
             Map<UUID, List<int[]>> ownerClaimChunks = new HashMap<>();
             int foundClaims = 0;
 
-            for (int cx = minChunkX; cx <= maxChunkX; cx++) {
-                for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
-                    String chunkKey = ChunkUtil.chunkKey(cx, cz);
-                    UUID ownerId = worldClaims.get(chunkKey);
+            for (Map.Entry<String, UUID> entry : worldClaims.entrySet()) {
+                int[] coords = ChunkUtil.parseChunkKey(entry.getKey());
+                if (coords == null) continue;
 
-                    if (ownerId != null) {
-                        foundClaims++;
-                        // Track for marker placement
-                        ownerClaimChunks.computeIfAbsent(ownerId, k -> new ArrayList<>())
-                                       .add(new int[]{cx, cz});
-                    }
+                int cx = coords[0];
+                int cz = coords[1];
+
+                // Filter to view bounds
+                if (cx >= minChunkX && cx <= maxChunkX && cz >= minChunkZ && cz <= maxChunkZ) {
+                    foundClaims++;
+                    ownerClaimChunks.computeIfAbsent(entry.getValue(), k -> new ArrayList<>())
+                                   .add(new int[]{cx, cz});
                 }
             }
 

@@ -1,11 +1,13 @@
 package com.easyclaims.data;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Holds all claims and trusted players for a single player.
@@ -18,8 +20,8 @@ public class PlayerClaims {
 
     public PlayerClaims(UUID owner) {
         this.owner = owner;
-        this.claims = new ArrayList<>();
-        this.trustedPlayers = new HashMap<>();
+        this.claims = Collections.synchronizedList(new ArrayList<>());
+        this.trustedPlayers = new ConcurrentHashMap<>();
     }
 
     public UUID getOwner() {
@@ -27,7 +29,9 @@ public class PlayerClaims {
     }
 
     public List<Claim> getClaims() {
-        return new ArrayList<>(claims);
+        synchronized (claims) {
+            return new ArrayList<>(claims);  // Safe copy under lock
+        }
     }
 
     public int getClaimCount() {
@@ -35,21 +39,30 @@ public class PlayerClaims {
     }
 
     public void addClaim(Claim claim) {
-        if (!hasClaim(claim.getWorld(), claim.getChunkX(), claim.getChunkZ())) {
-            claims.add(claim);
+        synchronized (claims) {
+            if (!claims.stream().anyMatch(c -> c.getWorld().equals(claim.getWorld()) &&
+                    c.getChunkX() == claim.getChunkX() && c.getChunkZ() == claim.getChunkZ())) {
+                claims.add(claim);
+            }
         }
     }
 
     public boolean removeClaim(String world, int chunkX, int chunkZ) {
-        return claims.removeIf(c -> c.getWorld().equals(world) && c.getChunkX() == chunkX && c.getChunkZ() == chunkZ);
+        synchronized (claims) {
+            return claims.removeIf(c -> c.getWorld().equals(world) && c.getChunkX() == chunkX && c.getChunkZ() == chunkZ);
+        }
     }
 
     public boolean hasClaim(String world, int chunkX, int chunkZ) {
-        return claims.stream().anyMatch(c -> c.getWorld().equals(world) && c.getChunkX() == chunkX && c.getChunkZ() == chunkZ);
+        synchronized (claims) {
+            return claims.stream().anyMatch(c -> c.getWorld().equals(world) && c.getChunkX() == chunkX && c.getChunkZ() == chunkZ);
+        }
     }
 
     public void clearAllClaims() {
-        claims.clear();
+        synchronized (claims) {
+            claims.clear();
+        }
     }
 
     public Set<UUID> getTrustedPlayers() {
@@ -60,7 +73,7 @@ public class PlayerClaims {
      * Gets all trusted players with their data.
      */
     public Map<UUID, TrustedPlayer> getTrustedPlayersMap() {
-        return new HashMap<>(trustedPlayers);
+        return Collections.unmodifiableMap(trustedPlayers);
     }
 
     /**
@@ -80,13 +93,16 @@ public class PlayerClaims {
      * Add or update a trusted player with a specific trust level.
      */
     public void addTrustedPlayer(UUID playerId, String playerName, TrustLevel level) {
-        TrustedPlayer existing = trustedPlayers.get(playerId);
-        if (existing != null) {
-            existing.setName(playerName);
-            existing.setLevel(level);
-        } else {
-            trustedPlayers.put(playerId, new TrustedPlayer(playerId, playerName, level));
-        }
+        // Use compute() for atomic check-and-update to avoid race conditions
+        trustedPlayers.compute(playerId, (id, existing) -> {
+            if (existing != null) {
+                existing.setName(playerName);
+                existing.setLevel(level);
+                return existing;
+            } else {
+                return new TrustedPlayer(playerId, playerName, level);
+            }
+        });
     }
 
     /**

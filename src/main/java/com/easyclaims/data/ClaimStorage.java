@@ -10,6 +10,7 @@ import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -17,6 +18,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Manages persistent storage of claims using JSON files.
@@ -30,6 +35,12 @@ public class ClaimStorage {
     private final Map<String, Map<String, UUID>> claimIndex; // world -> (chunkKey -> ownerUUID)
     private final Map<UUID, String> playerNames; // playerId -> username (for map display)
 
+    // Async save infrastructure
+    private final ScheduledExecutorService saveExecutor;
+    private final AtomicBoolean indexDirty = new AtomicBoolean(false);
+    private final AtomicBoolean namesDirty = new AtomicBoolean(false);
+    private final Set<UUID> dirtyPlayers = ConcurrentHashMap.newKeySet();
+
     public ClaimStorage(Path dataDirectory) {
         this.claimsDirectory = dataDirectory.resolve("claims");
         this.indexFile = claimsDirectory.resolve("index.json");
@@ -38,6 +49,14 @@ public class ClaimStorage {
         this.cache = new ConcurrentHashMap<>();
         this.claimIndex = new ConcurrentHashMap<>();
         this.playerNames = new ConcurrentHashMap<>();
+
+        // Initialize async save executor
+        this.saveExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "EasyClaims-Storage");
+            t.setDaemon(true);
+            return t;
+        });
+        saveExecutor.scheduleAtFixedRate(this::flushDirtyData, 30, 30, TimeUnit.SECONDS);
 
         try {
             Files.createDirectories(claimsDirectory);
@@ -74,6 +93,10 @@ public class ClaimStorage {
     }
 
     private void saveIndex() {
+        indexDirty.set(true);
+    }
+
+    private void saveIndexNow() {
         Map<String, Map<String, String>> toSave = new HashMap<>();
         for (Map.Entry<String, Map<String, UUID>> worldEntry : claimIndex.entrySet()) {
             Map<String, String> worldClaims = new HashMap<>();
@@ -110,6 +133,10 @@ public class ClaimStorage {
     }
 
     private void saveNames() {
+        namesDirty.set(true);
+    }
+
+    private void saveNamesNow() {
         Map<String, String> toSave = new HashMap<>();
         for (Map.Entry<UUID, String> entry : playerNames.entrySet()) {
             toSave.put(entry.getKey().toString(), entry.getValue());
@@ -147,9 +174,9 @@ public class ClaimStorage {
     public Map<String, UUID> getClaimedChunksInWorld(String world) {
         Map<String, UUID> worldClaims = claimIndex.get(world);
         if (worldClaims == null) {
-            return new HashMap<>();
+            return Collections.emptyMap();
         }
-        return new HashMap<>(worldClaims);
+        return Collections.unmodifiableMap(worldClaims);
     }
 
     /**
@@ -254,6 +281,10 @@ public class ClaimStorage {
     }
 
     public void savePlayerClaims(UUID playerId) {
+        dirtyPlayers.add(playerId);
+    }
+
+    private void savePlayerClaimsNow(UUID playerId) {
         PlayerClaims claims = cache.get(playerId);
         if (claims == null) return;
 
@@ -389,11 +420,46 @@ public class ClaimStorage {
     }
 
     public void saveAll() {
+        // Mark everything dirty
         for (UUID playerId : cache.keySet()) {
-            savePlayerClaims(playerId);
+            dirtyPlayers.add(playerId);
         }
-        saveIndex();
-        saveNames();
+        indexDirty.set(true);
+        namesDirty.set(true);
+        // Synchronously flush
+        flushDirtyData();
+    }
+
+    /**
+     * Flushes dirty data to disk. Called periodically by background thread
+     * and synchronously during shutdown.
+     */
+    private void flushDirtyData() {
+        if (indexDirty.compareAndSet(true, false)) {
+            saveIndexNow();
+        }
+        if (namesDirty.compareAndSet(true, false)) {
+            saveNamesNow();
+        }
+        // Copy and clear to avoid concurrent modification
+        for (UUID playerId : dirtyPlayers.toArray(new UUID[0])) {
+            dirtyPlayers.remove(playerId);
+            savePlayerClaimsNow(playerId);
+        }
+    }
+
+    /**
+     * Shuts down the async save executor and performs final flush.
+     */
+    public void shutdown() {
+        saveExecutor.shutdown();
+        try {
+            saveExecutor.awaitTermination(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        // Final synchronous flush to ensure all data is saved
+        flushDirtyData();
     }
 
     // JSON data classes

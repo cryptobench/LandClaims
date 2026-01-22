@@ -49,6 +49,7 @@ public class ClaimImageBuilder {
     @Nonnull
     private final int[] fluidSamples;
     private final MapColor outColor = new MapColor();
+    private final UUID[] nearbyOwners = new UUID[4];  // Reusable array for neighboring claim lookups
     @Nullable
     private WorldChunk worldChunk;
     private FluidSection[] fluidSections;
@@ -286,18 +287,11 @@ public class ClaimImageBuilder {
         UUID claimOwner = EasyClaimsAccess.getClaimOwner(worldName, chunkX, chunkZ);
         Color claimColor = claimOwner != null ? ClaimColorGenerator.getPlayerColor(claimOwner) : null;
 
-        // Debug logging (only for claimed chunks to reduce spam)
-        if (claimOwner != null) {
-            System.out.println("[ClaimMap] Rendering claimed chunk " + chunkX + "," + chunkZ + " in world " + worldName + " owner=" + claimOwner);
-        }
-
-        // Get neighboring claim owners to determine borders
-        UUID[] nearbyOwners = new UUID[]{
-                EasyClaimsAccess.getClaimOwner(this.worldChunk.getWorld().getName(), chunkX, chunkZ + 1), // SOUTH
-                EasyClaimsAccess.getClaimOwner(this.worldChunk.getWorld().getName(), chunkX, chunkZ - 1), // NORTH
-                EasyClaimsAccess.getClaimOwner(this.worldChunk.getWorld().getName(), chunkX + 1, chunkZ), // EAST
-                EasyClaimsAccess.getClaimOwner(this.worldChunk.getWorld().getName(), chunkX - 1, chunkZ), // WEST
-        };
+        // Get neighboring claim owners to determine borders (reuse array to reduce allocations)
+        nearbyOwners[0] = EasyClaimsAccess.getClaimOwner(worldName, chunkX, chunkZ + 1); // SOUTH
+        nearbyOwners[1] = EasyClaimsAccess.getClaimOwner(worldName, chunkX, chunkZ - 1); // NORTH
+        nearbyOwners[2] = EasyClaimsAccess.getClaimOwner(worldName, chunkX + 1, chunkZ); // EAST
+        nearbyOwners[3] = EasyClaimsAccess.getClaimOwner(worldName, chunkX - 1, chunkZ); // WEST
 
         // Generate the image
         for (int ix = 0; ix < this.image.width; ++ix) {

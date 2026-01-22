@@ -35,12 +35,7 @@ public class EasyClaimsAccess {
             System.out.println("[EasyClaimsAccess] ERROR: claimStorage is null!");
             return null;
         }
-        UUID owner = claimStorage.getClaimOwner(worldName, chunkX, chunkZ);
-        // Debug: log when we find a claim (first few only to avoid spam)
-        if (owner != null) {
-            System.out.println("[EasyClaimsAccess] Found claim at " + worldName + " " + chunkX + "," + chunkZ + " owner=" + owner);
-        }
-        return owner;
+        return claimStorage.getClaimOwner(worldName, chunkX, chunkZ);
     }
 
     /**

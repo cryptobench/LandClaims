@@ -241,9 +241,9 @@ public class EasyClaims extends JavaPlugin {
             playtimeManager.shutdown();
         }
 
-        // Save all claim data
+        // Shutdown claim storage (flushes pending saves and stops background thread)
         if (claimStorage != null) {
-            claimStorage.saveAll();
+            claimStorage.shutdown();
         }
     }
 
