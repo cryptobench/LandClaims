@@ -1,34 +1,30 @@
 package com.easyclaims.commands.subcommands.admin.grant;
 
-import com.hypixel.hytale.component.Ref;
-import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.NameMatching;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
 import com.hypixel.hytale.server.core.command.system.arguments.system.RequiredArg;
 import com.hypixel.hytale.server.core.command.system.arguments.types.ArgTypes;
-import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
+import com.hypixel.hytale.server.core.command.system.basecommands.CommandBase;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.Universe;
-import com.hypixel.hytale.server.core.universe.world.World;
-import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.easyclaims.EasyClaims;
 import com.easyclaims.data.PlayerClaims;
 
-import javax.annotation.Nonnull;
 import java.awt.Color;
 import java.util.UUID;
 
 /**
  * Grants bonus claim slots to a player (additive).
  * Works for online and offline players.
+ * Can be run from console or by a player.
  *
  * Usage: /easyclaims admin grant claims <player> <amount>
  *
  * The bonus slots are added on top of the playtime-based calculation,
  * so they always apply regardless of the max claims cap.
  */
-public class GrantClaimsSubcommand extends AbstractPlayerCommand {
+public class GrantClaimsSubcommand extends CommandBase {
     private final EasyClaims plugin;
     private final RequiredArg<String> playerArg;
     private final RequiredArg<Integer> amountArg;
@@ -46,16 +42,12 @@ public class GrantClaimsSubcommand extends AbstractPlayerCommand {
     }
 
     @Override
-    protected void execute(@Nonnull CommandContext ctx,
-                          @Nonnull Store<EntityStore> store,
-                          @Nonnull Ref<EntityStore> playerRef,
-                          @Nonnull PlayerRef playerData,
-                          @Nonnull World world) {
+    protected void executeSync(CommandContext ctx) {
         String playerInput = playerArg.get(ctx);
         int amount = amountArg.get(ctx);
 
         if (amount <= 0) {
-            playerData.sendMessage(Message.raw("Amount must be positive.").color(RED));
+            ctx.sendMessage(Message.raw("Amount must be positive.").color(RED));
             return;
         }
 
@@ -80,8 +72,8 @@ public class GrantClaimsSubcommand extends AbstractPlayerCommand {
                 // Try 3: Lookup by username in stored names
                 targetId = plugin.getClaimStorage().getPlayerUUID(playerInput);
                 if (targetId == null) {
-                    playerData.sendMessage(Message.raw("Player not found: " + playerInput).color(RED));
-                    playerData.sendMessage(Message.raw("Use a UUID for players who have never claimed.").color(YELLOW));
+                    ctx.sendMessage(Message.raw("Player not found: " + playerInput).color(RED));
+                    ctx.sendMessage(Message.raw("Use a UUID for players who have never claimed.").color(YELLOW));
                     return;
                 }
             }
@@ -97,7 +89,7 @@ public class GrantClaimsSubcommand extends AbstractPlayerCommand {
         plugin.getClaimStorage().savePlayerClaims(targetId);
 
         // Report result
-        playerData.sendMessage(Message.raw("Granted " + amount + " bonus claim slots to " + targetName).color(GREEN));
-        playerData.sendMessage(Message.raw("Bonus slots: " + previousBonus + " -> " + newBonus).color(YELLOW));
+        ctx.sendMessage(Message.raw("Granted " + amount + " bonus claim slots to " + targetName).color(GREEN));
+        ctx.sendMessage(Message.raw("Bonus slots: " + previousBonus + " -> " + newBonus).color(YELLOW));
     }
 }

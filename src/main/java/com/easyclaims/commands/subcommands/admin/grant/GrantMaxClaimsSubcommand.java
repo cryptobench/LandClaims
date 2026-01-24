@@ -1,27 +1,23 @@
 package com.easyclaims.commands.subcommands.admin.grant;
 
-import com.hypixel.hytale.component.Ref;
-import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.NameMatching;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
 import com.hypixel.hytale.server.core.command.system.arguments.system.RequiredArg;
 import com.hypixel.hytale.server.core.command.system.arguments.types.ArgTypes;
-import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
+import com.hypixel.hytale.server.core.command.system.basecommands.CommandBase;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.Universe;
-import com.hypixel.hytale.server.core.universe.world.World;
-import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.easyclaims.EasyClaims;
 import com.easyclaims.data.PlayerClaims;
 
-import javax.annotation.Nonnull;
 import java.awt.Color;
 import java.util.UUID;
 
 /**
  * Increases a player's maximum claims cap (additive) or sets unlimited.
  * Works for online and offline players.
+ * Can be run from console or by a player.
  *
  * Usage:
  *   /easyclaims admin grant maxclaims <player> <amount>   - Add to max claims cap (additive)
@@ -29,7 +25,7 @@ import java.util.UUID;
  *
  * The bonus is added to the server's default max claims cap.
  */
-public class GrantMaxClaimsSubcommand extends AbstractPlayerCommand {
+public class GrantMaxClaimsSubcommand extends CommandBase {
     private final EasyClaims plugin;
     private final RequiredArg<String> playerArg;
     private final RequiredArg<String> amountArg;
@@ -48,11 +44,7 @@ public class GrantMaxClaimsSubcommand extends AbstractPlayerCommand {
     }
 
     @Override
-    protected void execute(@Nonnull CommandContext ctx,
-                          @Nonnull Store<EntityStore> store,
-                          @Nonnull Ref<EntityStore> playerRef,
-                          @Nonnull PlayerRef playerData,
-                          @Nonnull World world) {
+    protected void executeSync(CommandContext ctx) {
         String playerInput = playerArg.get(ctx);
         String amountInput = amountArg.get(ctx);
 
@@ -77,8 +69,8 @@ public class GrantMaxClaimsSubcommand extends AbstractPlayerCommand {
                 // Try 3: Lookup by username in stored names
                 targetId = plugin.getClaimStorage().getPlayerUUID(playerInput);
                 if (targetId == null) {
-                    playerData.sendMessage(Message.raw("Player not found: " + playerInput).color(RED));
-                    playerData.sendMessage(Message.raw("Use a UUID for players who have never claimed.").color(YELLOW));
+                    ctx.sendMessage(Message.raw("Player not found: " + playerInput).color(RED));
+                    ctx.sendMessage(Message.raw("Use a UUID for players who have never claimed.").color(YELLOW));
                     return;
                 }
             }
@@ -92,8 +84,8 @@ public class GrantMaxClaimsSubcommand extends AbstractPlayerCommand {
             claims.setUnlimitedClaims(true);
             plugin.getClaimStorage().savePlayerClaims(targetId);
 
-            playerData.sendMessage(Message.raw("Set unlimited claims for " + targetName).color(GOLD));
-            playerData.sendMessage(Message.raw("They can now claim without any limit!").color(YELLOW));
+            ctx.sendMessage(Message.raw("Set unlimited claims for " + targetName).color(GOLD));
+            ctx.sendMessage(Message.raw("They can now claim without any limit!").color(YELLOW));
             return;
         }
 
@@ -102,20 +94,20 @@ public class GrantMaxClaimsSubcommand extends AbstractPlayerCommand {
         try {
             amount = Integer.parseInt(amountInput);
         } catch (NumberFormatException e) {
-            playerData.sendMessage(Message.raw("Invalid amount: " + amountInput).color(RED));
-            playerData.sendMessage(Message.raw("Use a number or 'unlimited'.").color(YELLOW));
+            ctx.sendMessage(Message.raw("Invalid amount: " + amountInput).color(RED));
+            ctx.sendMessage(Message.raw("Use a number or 'unlimited'.").color(YELLOW));
             return;
         }
 
         if (amount <= 0) {
-            playerData.sendMessage(Message.raw("Amount must be positive.").color(RED));
+            ctx.sendMessage(Message.raw("Amount must be positive.").color(RED));
             return;
         }
 
         // If they had unlimited, disable it since we're setting a specific bonus
         if (claims.hasUnlimitedClaims()) {
             claims.setUnlimitedClaims(false);
-            playerData.sendMessage(Message.raw("Note: Unlimited flag was disabled.").color(YELLOW));
+            ctx.sendMessage(Message.raw("Note: Unlimited flag was disabled.").color(YELLOW));
         }
 
         // Add bonus max claims (additive)
@@ -131,8 +123,8 @@ public class GrantMaxClaimsSubcommand extends AbstractPlayerCommand {
         int effectiveMax = serverMax + newBonus;
 
         // Report result
-        playerData.sendMessage(Message.raw("Increased max claims for " + targetName + " by " + amount).color(GREEN));
-        playerData.sendMessage(Message.raw("Bonus max claims: " + previousBonus + " -> " + newBonus).color(YELLOW));
-        playerData.sendMessage(Message.raw("Effective max: " + serverMax + " (server) + " + newBonus + " (bonus) = " + effectiveMax).color(YELLOW));
+        ctx.sendMessage(Message.raw("Increased max claims for " + targetName + " by " + amount).color(GREEN));
+        ctx.sendMessage(Message.raw("Bonus max claims: " + previousBonus + " -> " + newBonus).color(YELLOW));
+        ctx.sendMessage(Message.raw("Effective max: " + serverMax + " (server) + " + newBonus + " (bonus) = " + effectiveMax).color(YELLOW));
     }
 }

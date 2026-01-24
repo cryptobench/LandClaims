@@ -1,28 +1,24 @@
 package com.easyclaims.commands.subcommands.admin;
 
-import com.hypixel.hytale.component.Ref;
-import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.NameMatching;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
 import com.hypixel.hytale.server.core.command.system.arguments.system.RequiredArg;
 import com.hypixel.hytale.server.core.command.system.arguments.types.ArgTypes;
-import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
+import com.hypixel.hytale.server.core.command.system.basecommands.CommandBase;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.Universe;
-import com.hypixel.hytale.server.core.universe.world.World;
-import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.easyclaims.EasyClaims;
 import com.easyclaims.data.PlayerClaims;
 import com.easyclaims.data.PlaytimeData;
 
-import javax.annotation.Nonnull;
 import java.awt.Color;
 import java.util.UUID;
 
 /**
  * Shows detailed claim information for a player.
  * Works for online and offline players.
+ * Can be run from console or by a player.
  *
  * Usage: /easyclaims admin info <player>
  *
@@ -33,7 +29,7 @@ import java.util.UUID;
  * - Bonus max claims (admin-granted)
  * - Unlimited claims status
  */
-public class AdminInfoSubcommand extends AbstractPlayerCommand {
+public class AdminInfoSubcommand extends CommandBase {
     private final EasyClaims plugin;
     private final RequiredArg<String> playerArg;
 
@@ -52,11 +48,7 @@ public class AdminInfoSubcommand extends AbstractPlayerCommand {
     }
 
     @Override
-    protected void execute(@Nonnull CommandContext ctx,
-                          @Nonnull Store<EntityStore> store,
-                          @Nonnull Ref<EntityStore> playerRef,
-                          @Nonnull PlayerRef playerData,
-                          @Nonnull World world) {
+    protected void executeSync(CommandContext ctx) {
         String playerInput = playerArg.get(ctx);
 
         // Resolve player (online or offline)
@@ -82,8 +74,8 @@ public class AdminInfoSubcommand extends AbstractPlayerCommand {
                 // Try 3: Lookup by username in stored names
                 targetId = plugin.getClaimStorage().getPlayerUUID(playerInput);
                 if (targetId == null) {
-                    playerData.sendMessage(Message.raw("Player not found: " + playerInput).color(RED));
-                    playerData.sendMessage(Message.raw("Use a UUID for players who have never claimed.").color(YELLOW));
+                    ctx.sendMessage(Message.raw("Player not found: " + playerInput).color(RED));
+                    ctx.sendMessage(Message.raw("Use a UUID for players who have never claimed.").color(YELLOW));
                     return;
                 }
             }
@@ -112,55 +104,55 @@ public class AdminInfoSubcommand extends AbstractPlayerCommand {
         int cappedMax = Math.min(baseMax, serverMax + bonusMax);
 
         // Display header
-        playerData.sendMessage(Message.raw("=== Claim Info: " + targetName + " ===").color(GOLD));
+        ctx.sendMessage(Message.raw("=== Claim Info: " + targetName + " ===").color(GOLD));
         String status = isOnline ? " (online)" : " (offline)";
-        playerData.sendMessage(Message.raw("UUID: " + targetId.toString() + status).color(GRAY));
+        ctx.sendMessage(Message.raw("UUID: " + targetId.toString() + status).color(GRAY));
 
         // Display claims
         String claimStatus = currentClaims + " / " + (unlimited ? "unlimited" : String.valueOf(maxClaims));
-        playerData.sendMessage(Message.raw("Claims: " + claimStatus).color(currentClaims >= maxClaims && !unlimited ? YELLOW : GREEN));
+        ctx.sendMessage(Message.raw("Claims: " + claimStatus).color(currentClaims >= maxClaims && !unlimited ? YELLOW : GREEN));
 
         // Display playtime
         String playtimeStr = String.format("%.1f hours", playtimeHours);
-        playerData.sendMessage(Message.raw("Playtime: " + playtimeStr).color(AQUA));
+        ctx.sendMessage(Message.raw("Playtime: " + playtimeStr).color(AQUA));
 
         // Display max claims calculation breakdown
-        playerData.sendMessage(Message.raw("--- Max Claims Breakdown ---").color(GRAY));
-        playerData.sendMessage(Message.raw("  Starting claims: " + serverStarting).color(GRAY));
-        playerData.sendMessage(Message.raw("  From playtime: +" + fromPlaytime + " (" + String.format("%.1f", playtimeHours) + "h x " + claimsPerHour + "/h)").color(GRAY));
-        playerData.sendMessage(Message.raw("  Base total: " + baseMax).color(GRAY));
+        ctx.sendMessage(Message.raw("--- Max Claims Breakdown ---").color(GRAY));
+        ctx.sendMessage(Message.raw("  Starting claims: " + serverStarting).color(GRAY));
+        ctx.sendMessage(Message.raw("  From playtime: +" + fromPlaytime + " (" + String.format("%.1f", playtimeHours) + "h x " + claimsPerHour + "/h)").color(GRAY));
+        ctx.sendMessage(Message.raw("  Base total: " + baseMax).color(GRAY));
 
         if (!unlimited) {
             int effectiveCap = serverMax + bonusMax;
-            playerData.sendMessage(Message.raw("  Cap: " + serverMax + " (server)" + (bonusMax > 0 ? " + " + bonusMax + " (bonus)" : "") + " = " + effectiveCap).color(GRAY));
-            playerData.sendMessage(Message.raw("  After cap: " + cappedMax).color(GRAY));
+            ctx.sendMessage(Message.raw("  Cap: " + serverMax + " (server)" + (bonusMax > 0 ? " + " + bonusMax + " (bonus)" : "") + " = " + effectiveCap).color(GRAY));
+            ctx.sendMessage(Message.raw("  After cap: " + cappedMax).color(GRAY));
         }
 
         // Display admin-granted bonuses
-        playerData.sendMessage(Message.raw("--- Admin Bonuses ---").color(GOLD));
+        ctx.sendMessage(Message.raw("--- Admin Bonuses ---").color(GOLD));
 
         if (bonusSlots > 0) {
-            playerData.sendMessage(Message.raw("  Bonus claim slots: +" + bonusSlots).color(GREEN));
+            ctx.sendMessage(Message.raw("  Bonus claim slots: +" + bonusSlots).color(GREEN));
         } else {
-            playerData.sendMessage(Message.raw("  Bonus claim slots: 0").color(GRAY));
+            ctx.sendMessage(Message.raw("  Bonus claim slots: 0").color(GRAY));
         }
 
         if (bonusMax > 0) {
-            playerData.sendMessage(Message.raw("  Bonus max claims: +" + bonusMax).color(GREEN));
+            ctx.sendMessage(Message.raw("  Bonus max claims: +" + bonusMax).color(GREEN));
         } else {
-            playerData.sendMessage(Message.raw("  Bonus max claims: 0").color(GRAY));
+            ctx.sendMessage(Message.raw("  Bonus max claims: 0").color(GRAY));
         }
 
         if (unlimited) {
-            playerData.sendMessage(Message.raw("  Unlimited claims: YES").color(GOLD));
+            ctx.sendMessage(Message.raw("  Unlimited claims: YES").color(GOLD));
         } else {
-            playerData.sendMessage(Message.raw("  Unlimited claims: no").color(GRAY));
+            ctx.sendMessage(Message.raw("  Unlimited claims: no").color(GRAY));
         }
 
         // Final effective max
         if (!unlimited) {
             int effective = cappedMax + bonusSlots;
-            playerData.sendMessage(Message.raw("Effective max: " + effective + " (" + cappedMax + " + " + bonusSlots + " bonus slots)").color(AQUA));
+            ctx.sendMessage(Message.raw("Effective max: " + effective + " (" + cappedMax + " + " + bonusSlots + " bonus slots)").color(AQUA));
         }
     }
 }

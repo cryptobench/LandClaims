@@ -50,7 +50,8 @@ public class AdminGuiSubcommand extends AbstractPlayerCommand {
                             chunkZ,
                             plugin.getClaimManager(),
                             plugin.getClaimStorage(),
-                            true,  // Admin mode
+                            true,   // isAdmin - bypass limits
+                            true,   // adminClaimMode - create admin claims instead of player claims
                             (worldName) -> plugin.refreshWorldMap(worldName)
                     )
             );

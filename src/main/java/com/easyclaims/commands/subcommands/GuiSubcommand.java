@@ -50,7 +50,8 @@ public class GuiSubcommand extends AbstractPlayerCommand {
                             chunkZ,
                             plugin.getClaimManager(),
                             plugin.getClaimStorage(),
-                            false,
+                            false,  // isAdmin
+                            false,  // adminClaimMode - create player claims
                             (worldName) -> plugin.refreshWorldMap(worldName)
                     )
             );

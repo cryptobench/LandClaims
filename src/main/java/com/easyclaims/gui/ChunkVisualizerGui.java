@@ -1,5 +1,7 @@
 package com.easyclaims.gui;
 
+import com.easyclaims.data.AdminClaims;
+import com.easyclaims.data.Claim;
 import com.easyclaims.data.ClaimStorage;
 import com.easyclaims.managers.ClaimManager;
 import static com.easyclaims.util.ChunkUtil.CHUNK_SIZE;
@@ -35,6 +37,7 @@ public class ChunkVisualizerGui extends InteractiveCustomUIPage<ChunkVisualizerG
     private static final Color WILDERNESS_COLOR = new Color(0, 170, 0, 34);
     private static final Color OWN_CLAIM_COLOR = new Color(85, 255, 255, 128);
     private static final Color OTHER_CLAIM_COLOR = new Color(255, 85, 85, 128);
+    private static final Color ADMIN_CLAIM_COLOR = new Color(170, 85, 255, 128);  // Purple for admin claims
     private static final String GOLD_COLOR = "#93844c";
 
     private final int centerChunkX;
@@ -43,11 +46,12 @@ public class ChunkVisualizerGui extends InteractiveCustomUIPage<ChunkVisualizerG
     private final ClaimManager claimManager;
     private final ClaimStorage claimStorage;
     private final boolean isAdmin;
+    private final boolean adminClaimMode;  // true = create admin claims, false = create player claims
     private final Consumer<String> mapRefresher;
 
     public ChunkVisualizerGui(@Nonnull PlayerRef playerRef, String worldName, int centerChunkX, int centerChunkZ,
                                ClaimManager claimManager, ClaimStorage claimStorage, boolean isAdmin,
-                               Consumer<String> mapRefresher) {
+                               boolean adminClaimMode, Consumer<String> mapRefresher) {
         super(playerRef, CustomPageLifetime.CanDismiss, GuiData.CODEC);
         this.worldName = worldName;
         this.centerChunkX = centerChunkX;
@@ -55,6 +59,7 @@ public class ChunkVisualizerGui extends InteractiveCustomUIPage<ChunkVisualizerG
         this.claimManager = claimManager;
         this.claimStorage = claimStorage;
         this.isAdmin = isAdmin;
+        this.adminClaimMode = adminClaimMode;
         this.mapRefresher = mapRefresher;
     }
 
@@ -84,27 +89,38 @@ public class ChunkVisualizerGui extends InteractiveCustomUIPage<ChunkVisualizerG
             // Try to claim the chunk
             UUID existingOwner = claimStorage.getClaimOwner(worldName, chunkX, chunkZ);
             if (existingOwner == null) {
-                // Convert chunk coords to block coords (center of chunk)
-                double blockX = chunkX * CHUNK_SIZE + CHUNK_SIZE / 2.0;
-                double blockZ = chunkZ * CHUNK_SIZE + CHUNK_SIZE / 2.0;
+                if (adminClaimMode) {
+                    // Create admin claim (server-owned)
+                    claimStorage.setPlayerName(AdminClaims.ADMIN_UUID, AdminClaims.DEFAULT_DISPLAY_NAME);
+                    Claim claim = Claim.createAdminClaim(worldName, chunkX, chunkZ, null);
+                    claimStorage.addClaim(AdminClaims.ADMIN_UUID, claim);
+                    player.sendMessage(Message.raw("Admin claim created!").color(new Color(85, 255, 85)));
+                    if (mapRefresher != null) {
+                        mapRefresher.accept(worldName);
+                    }
+                } else {
+                    // Convert chunk coords to block coords (center of chunk)
+                    double blockX = chunkX * CHUNK_SIZE + CHUNK_SIZE / 2.0;
+                    double blockZ = chunkZ * CHUNK_SIZE + CHUNK_SIZE / 2.0;
 
-                ClaimManager.ClaimResult result = claimManager.claimChunk(playerId, worldName, blockX, blockZ);
+                    ClaimManager.ClaimResult result = claimManager.claimChunk(playerId, worldName, blockX, blockZ, isAdmin);
 
-                switch (result) {
-                    case SUCCESS:
-                        player.sendMessage(Message.raw("Chunk claimed!").color(new Color(85, 255, 85)));
-                        if (mapRefresher != null) {
-                            mapRefresher.accept(worldName);
-                        }
-                        break;
-                    case LIMIT_REACHED:
-                        player.sendMessage(Message.raw("You've reached your claim limit! Play more to unlock more claims.").color(new Color(255, 85, 85)));
-                        break;
-                    case TOO_CLOSE_TO_OTHER_CLAIM:
-                        player.sendMessage(Message.raw("Too close to another player's claim!").color(new Color(255, 85, 85)));
-                        break;
-                    default:
-                        break;
+                    switch (result) {
+                        case SUCCESS:
+                            player.sendMessage(Message.raw("Chunk claimed!").color(new Color(85, 255, 85)));
+                            if (mapRefresher != null) {
+                                mapRefresher.accept(worldName);
+                            }
+                            break;
+                        case LIMIT_REACHED:
+                            player.sendMessage(Message.raw("You've reached your claim limit! Play more to unlock more claims.").color(new Color(255, 85, 85)));
+                            break;
+                        case TOO_CLOSE_TO_OTHER_CLAIM:
+                            player.sendMessage(Message.raw("Too close to another player's claim!").color(new Color(255, 85, 85)));
+                            break;
+                        default:
+                            break;
+                    }
                 }
             }
         } else if (button.equals("RightClick")) {
@@ -149,28 +165,35 @@ public class ChunkVisualizerGui extends InteractiveCustomUIPage<ChunkVisualizerG
 
         UUID playerId = playerRef.getUuid();
 
-        // Set title for admin mode
-        if (isAdmin) {
-            uiCommandBuilder.set("#TitleText.Text", "Claim Manager - Admin Mode");
-        }
-
-        // Set claim count info
-        int currentClaims = claimManager.getPlayerClaims(playerId).getClaimCount();
-        int maxClaims = claimManager.getMaxClaims(playerId);
-        uiCommandBuilder.set("#ClaimedChunksInfo #ClaimedChunksCount.Text", String.valueOf(currentClaims));
-        uiCommandBuilder.set("#ClaimedChunksInfo #MaxChunksCount.Text", String.valueOf(maxClaims));
-
-        // Set next claim time with friendly format
-        double hoursUntilNext = claimManager.getHoursUntilNextClaim(playerId);
-        String nextClaimText;
-        if (currentClaims >= maxClaims && hoursUntilNext > 0) {
-            nextClaimText = formatTimeRemaining(hoursUntilNext);
-        } else if (currentClaims < maxClaims) {
-            nextClaimText = "Available!";
+        // Set title based on mode
+        if (adminClaimMode) {
+            uiCommandBuilder.set("#TitleText.Text", "Admin Claim Mode");
+            // Show admin claim info instead of player claim count
+            uiCommandBuilder.set("#ClaimedChunksInfo #ClaimedChunksCount.Text", "-");
+            uiCommandBuilder.set("#ClaimedChunksInfo #MaxChunksCount.Text", "-");
+            uiCommandBuilder.set("#PlaytimeInfo #NextClaimTime.Text", "Server Claims");
         } else {
-            nextClaimText = "Max reached";
+            if (isAdmin) {
+                uiCommandBuilder.set("#TitleText.Text", "Claim Manager - Admin Mode");
+            }
+            // Set claim count info
+            int currentClaims = claimManager.getPlayerClaims(playerId).getClaimCount();
+            int maxClaims = claimManager.getMaxClaims(playerId);
+            uiCommandBuilder.set("#ClaimedChunksInfo #ClaimedChunksCount.Text", String.valueOf(currentClaims));
+            uiCommandBuilder.set("#ClaimedChunksInfo #MaxChunksCount.Text", String.valueOf(maxClaims));
+
+            // Set next claim time with friendly format
+            double hoursUntilNext = claimManager.getHoursUntilNextClaim(playerId);
+            String nextClaimText;
+            if (currentClaims >= maxClaims && hoursUntilNext > 0) {
+                nextClaimText = formatTimeRemaining(hoursUntilNext);
+            } else if (currentClaims < maxClaims) {
+                nextClaimText = "Available!";
+            } else {
+                nextClaimText = "Max reached";
+            }
+            uiCommandBuilder.set("#PlaytimeInfo #NextClaimTime.Text", nextClaimText);
         }
-        uiCommandBuilder.set("#PlaytimeInfo #NextClaimTime.Text", nextClaimText);
 
         // Build the 17x17 chunk grid (8 chunks in each direction from center)
         int gridSize = 8;
@@ -193,14 +216,22 @@ public class ChunkVisualizerGui extends InteractiveCustomUIPage<ChunkVisualizerG
                 if (owner != null) {
                     // Chunk is claimed
                     String ownerName = claimStorage.getPlayerName(owner);
+                    boolean isAdminClaim = AdminClaims.isAdminClaim(owner);
                     Color chunkColor;
+                    Color tooltipColor;
 
-                    if (owner.equals(playerId)) {
+                    if (isAdminClaim) {
+                        // Admin/server claim - purple
+                        chunkColor = ADMIN_CLAIM_COLOR;
+                        tooltipColor = new Color(170, 85, 255);
+                    } else if (owner.equals(playerId)) {
                         // Player's own claim - cyan
                         chunkColor = OWN_CLAIM_COLOR;
+                        tooltipColor = new Color(85, 255, 255);
                     } else {
                         // Someone else's claim - red
                         chunkColor = OTHER_CLAIM_COLOR;
+                        tooltipColor = Color.WHITE;
                     }
 
                     uiCommandBuilder.set("#ChunkCards[" + z + "][" + x + "].Background.Color", ColorParseUtil.colorToHexAlpha(chunkColor));
@@ -209,7 +240,12 @@ public class ChunkVisualizerGui extends InteractiveCustomUIPage<ChunkVisualizerG
 
                     // Build tooltip - use simple text since Message doesn't support append
                     String tooltipText;
-                    if (owner.equals(playerId)) {
+                    if (isAdminClaim) {
+                        tooltipText = "Server Claim";
+                        if (isAdmin) {
+                            tooltipText += "\n\nRight Click to Remove";
+                        }
+                    } else if (owner.equals(playerId)) {
                         tooltipText = "Your Claim\n\nRight Click to Unclaim";
                     } else {
                         tooltipText = "Owner: " + ownerName;
@@ -219,7 +255,7 @@ public class ChunkVisualizerGui extends InteractiveCustomUIPage<ChunkVisualizerG
                     }
 
                     uiCommandBuilder.set("#ChunkCards[" + z + "][" + x + "].TooltipTextSpans",
-                            Message.raw(tooltipText).color(owner.equals(playerId) ? new Color(85, 255, 255) : Color.WHITE));
+                            Message.raw(tooltipText).color(tooltipColor));
 
                     // Bind right-click for unclaim (only for own chunks or admin)
                     if (owner.equals(playerId) || isAdmin) {
