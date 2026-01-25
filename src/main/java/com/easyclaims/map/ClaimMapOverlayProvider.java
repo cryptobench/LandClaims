@@ -3,11 +3,10 @@ package com.easyclaims.map;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.protocol.Transform;
 import com.hypixel.hytale.protocol.packets.worldmap.MapMarker;
-import com.hypixel.hytale.server.core.asset.type.gameplay.GameplayConfig;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.universe.world.World;
-import com.hypixel.hytale.server.core.universe.world.WorldMapTracker;
 import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapManager;
+import com.hypixel.hytale.server.core.universe.world.worldmap.markers.MapMarkerTracker;
 import com.easyclaims.data.ClaimStorage;
 import com.easyclaims.util.ChunkUtil;
 
@@ -44,8 +43,7 @@ public class ClaimMapOverlayProvider implements WorldMapManager.MarkerProvider {
     }
 
     @Override
-    public void update(World world, GameplayConfig gameplayConfig,
-                       WorldMapTracker tracker, int centerX, int centerY, int centerZ) {
+    public void update(World world, MapMarkerTracker tracker, int centerX, int centerY, int centerZ) {
         try {
             Player player = tracker.getPlayer();
             if (player == null) return;
