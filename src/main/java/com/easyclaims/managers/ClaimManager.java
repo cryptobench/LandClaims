@@ -84,8 +84,7 @@ public class ClaimManager {
         // Check claim limit - skip for admins with bypass enabled
         if (!bypassLimits) {
             PlayerClaims claims = claimStorage.getPlayerClaims(playerId);
-            PlaytimeData playtime = playtimeStorage.getPlaytime(playerId);
-            int maxClaims = config.calculateMaxClaims(playtime.getTotalHoursWithCurrentSession());
+            int maxClaims = getMaxClaims(playerId);
             int currentClaims = claims.getClaimCount();
 
             if (currentClaims >= maxClaims) {
