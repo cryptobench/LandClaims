@@ -192,8 +192,40 @@ public class EasyClaims extends JavaPlugin {
     }
 
     /**
+     * Toggles claim overlay visibility on the world map.
+     * Controls rendering via config flag - does NOT swap providers to preserve BetterMap settings.
+     *
+     * @param show true to show claims, false to hide
+     */
+    public void setClaimMapVisibility(boolean show) {
+        config.setShowClaimsOnMap(show);
+
+        // Refresh all world maps to apply the visibility change
+        // The EasyClaimsWorldMapProvider checks showClaimsOnMap at render time
+        for (Map.Entry<String, World> entry : WORLDS.entrySet()) {
+            String worldName = entry.getKey();
+            World world = entry.getValue();
+
+            if (world == null || world.getWorldConfig().isDeleteOnRemove()) {
+                continue;
+            }
+
+            try {
+                refreshWorldMap(worldName);
+                getLogger().atInfo().log("[Map] Refreshed map for world: %s (claims %s)", 
+                    worldName, show ? "visible" : "hidden");
+            } catch (Exception e) {
+                getLogger().atSevere().withCause(e).log("[Map] Error refreshing map for world: %s", worldName);
+            }
+        }
+    }
+
+    /**
      * Refreshes specific chunks on the world map.
      * More efficient than refreshing the entire map when only a few chunks changed.
+     * 
+     * When text grouping is enabled, uses a larger refresh radius to ensure
+     * all chunks in potential groups are updated when claims change.
      *
      * @param worldName The world name
      * @param chunkX The chunk X coordinate
@@ -206,10 +238,17 @@ public class EasyClaims extends JavaPlugin {
         }
 
         try {
-            // Create a set with this chunk and its neighbors (for border updates)
+            // Determine refresh radius based on grouping settings
+            // When grouping is enabled, we need to refresh all chunks that could be
+            // in the same group, since adding/removing a chunk affects group membership.
+            // The grouping algorithm uses maxExpand=8, so use that radius.
+            // When grouping is disabled, only need to refresh immediate neighbors for borders.
+            int refreshRadius = config.isMapTextGrouping() ? 8 : 1;
+            
+            // Create a set with this chunk and surrounding chunks
             LongSet chunksToRefresh = new LongOpenHashSet();
-            for (int dx = -1; dx <= 1; dx++) {
-                for (int dz = -1; dz <= 1; dz++) {
+            for (int dx = -refreshRadius; dx <= refreshRadius; dx++) {
+                for (int dz = -refreshRadius; dz <= refreshRadius; dz++) {
                     chunksToRefresh.add(ChunkUtil.indexChunk(chunkX + dx, chunkZ + dz));
                 }
             }
@@ -226,7 +265,8 @@ public class EasyClaims extends JavaPlugin {
                 }
             }
 
-            getLogger().atFine().log("[Map] Refreshed chunk %d,%d in world %s", chunkX, chunkZ, worldName);
+            getLogger().atFine().log("[Map] Refreshed chunk %d,%d (radius %d) in world %s", 
+                                     chunkX, chunkZ, refreshRadius, worldName);
         } catch (Exception e) {
             getLogger().atWarning().withCause(e).log("[Map] Error refreshing chunk %d,%d", chunkX, chunkZ);
         }

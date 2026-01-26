@@ -1,5 +1,15 @@
 package com.easyclaims.map;
 
+import java.awt.Color;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+
+import com.easyclaims.EasyClaimsAccess;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.protocol.packets.worldmap.MapImage;
@@ -11,15 +21,6 @@ import com.hypixel.hytale.server.core.universe.world.chunk.ChunkColumn;
 import com.hypixel.hytale.server.core.universe.world.chunk.WorldChunk;
 import com.hypixel.hytale.server.core.universe.world.chunk.section.FluidSection;
 import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
-import com.easyclaims.EasyClaimsAccess;
-
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import java.awt.Color;
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Builds map images with claim overlays rendered directly into the terrain.
@@ -284,12 +285,16 @@ public class ClaimImageBuilder {
 
         // Get claim info for this chunk using the accessor
         String worldName = this.worldChunk.getWorld().getName();
-        UUID claimOwner = EasyClaimsAccess.getClaimOwner(worldName, chunkX, chunkZ);
+
+        // Check if claim overlays should be shown
+        boolean showClaims = EasyClaimsAccess.shouldShowClaimsOnMap();
+
+        UUID claimOwner = showClaims ? EasyClaimsAccess.getClaimOwner(worldName, chunkX, chunkZ) : null;
         Color claimColor = claimOwner != null ? ClaimColorGenerator.getPlayerColor(claimOwner) : null;
 
         // Check for admin claims and PvP status
-        boolean isAdminClaim = EasyClaimsAccess.isAdminClaim(worldName, chunkX, chunkZ);
-        boolean pvpDisabled = EasyClaimsAccess.isPvPDisabled(worldName, chunkX, chunkZ);
+        boolean isAdminClaim = showClaims && EasyClaimsAccess.isAdminClaim(worldName, chunkX, chunkZ);
+        boolean pvpDisabled = showClaims && EasyClaimsAccess.isPvPDisabled(worldName, chunkX, chunkZ);
 
         // Admin claims get a distinct light blue color
         if (isAdminClaim && claimOwner != null) {
@@ -297,10 +302,12 @@ public class ClaimImageBuilder {
         }
 
         // Get neighboring claim owners to determine borders (reuse array to reduce allocations)
-        nearbyOwners[0] = EasyClaimsAccess.getClaimOwner(worldName, chunkX, chunkZ + 1); // SOUTH
-        nearbyOwners[1] = EasyClaimsAccess.getClaimOwner(worldName, chunkX, chunkZ - 1); // NORTH
-        nearbyOwners[2] = EasyClaimsAccess.getClaimOwner(worldName, chunkX + 1, chunkZ); // EAST
-        nearbyOwners[3] = EasyClaimsAccess.getClaimOwner(worldName, chunkX - 1, chunkZ); // WEST
+        if (showClaims) {
+            nearbyOwners[0] = EasyClaimsAccess.getClaimOwner(worldName, chunkX, chunkZ + 1); // SOUTH
+            nearbyOwners[1] = EasyClaimsAccess.getClaimOwner(worldName, chunkX, chunkZ - 1); // NORTH
+            nearbyOwners[2] = EasyClaimsAccess.getClaimOwner(worldName, chunkX + 1, chunkZ); // EAST
+            nearbyOwners[3] = EasyClaimsAccess.getClaimOwner(worldName, chunkX - 1, chunkZ); // WEST
+        }
 
         // Generate the image
         for (int ix = 0; ix < this.image.width; ++ix) {
@@ -316,7 +323,31 @@ public class ClaimImageBuilder {
 
                 getBlockColor(blockId, tint, this.outColor);
 
-                // Apply claim overlay if this chunk is claimed
+                // Apply lighting/shading
+                short north = this.neighborHeightSamples[sampleZ * (this.sampleWidth + 2) + sampleX + 1];
+                short south = this.neighborHeightSamples[(sampleZ + 2) * (this.sampleWidth + 2) + sampleX + 1];
+                short west = this.neighborHeightSamples[(sampleZ + 1) * (this.sampleWidth + 2) + sampleX];
+                short east = this.neighborHeightSamples[(sampleZ + 1) * (this.sampleWidth + 2) + sampleX + 2];
+                short northWest = this.neighborHeightSamples[sampleZ * (this.sampleWidth + 2) + sampleX];
+                short northEast = this.neighborHeightSamples[sampleZ * (this.sampleWidth + 2) + sampleX + 2];
+                short southWest = this.neighborHeightSamples[(sampleZ + 2) * (this.sampleWidth + 2) + sampleX];
+                short southEast = this.neighborHeightSamples[(sampleZ + 2) * (this.sampleWidth + 2) + sampleX + 2];
+
+                float shade = shadeFromHeights(blockPixelX, blockPixelZ, blockPixelWidth, blockPixelHeight,
+                        height, north, south, west, east, northWest, northEast, southWest, southEast);
+                this.outColor.multiply(shade);
+
+                // Apply fluid tinting (water/lava color)
+                if (height < 320) {
+                    int fluidId = this.fluidSamples[sampleIndex];
+                    if (fluidId != 0) {
+                        short fluidDepth = this.fluidDepthSamples[sampleIndex];
+                        int environmentId = this.environmentSamples[sampleIndex];
+                        getFluidColor(fluidId, environmentId, fluidDepth, this.outColor);
+                    }
+                }
+
+                // Apply claim overlay AFTER fluid tinting so it shows on water/ocean tiles
                 if (claimColor != null) {
                     boolean isBorder = false;
                     int borderSize = 2;
@@ -337,30 +368,6 @@ public class ClaimImageBuilder {
                     }
                 }
 
-                // Apply lighting/shading
-                short north = this.neighborHeightSamples[sampleZ * (this.sampleWidth + 2) + sampleX + 1];
-                short south = this.neighborHeightSamples[(sampleZ + 2) * (this.sampleWidth + 2) + sampleX + 1];
-                short west = this.neighborHeightSamples[(sampleZ + 1) * (this.sampleWidth + 2) + sampleX];
-                short east = this.neighborHeightSamples[(sampleZ + 1) * (this.sampleWidth + 2) + sampleX + 2];
-                short northWest = this.neighborHeightSamples[sampleZ * (this.sampleWidth + 2) + sampleX];
-                short northEast = this.neighborHeightSamples[sampleZ * (this.sampleWidth + 2) + sampleX + 2];
-                short southWest = this.neighborHeightSamples[(sampleZ + 2) * (this.sampleWidth + 2) + sampleX];
-                short southEast = this.neighborHeightSamples[(sampleZ + 2) * (this.sampleWidth + 2) + sampleX + 2];
-
-                float shade = shadeFromHeights(blockPixelX, blockPixelZ, blockPixelWidth, blockPixelHeight,
-                        height, north, south, west, east, northWest, northEast, southWest, southEast);
-                this.outColor.multiply(shade);
-
-                // Apply fluid tinting
-                if (height < 320) {
-                    int fluidId = this.fluidSamples[sampleIndex];
-                    if (fluidId != 0) {
-                        short fluidDepth = this.fluidDepthSamples[sampleIndex];
-                        int environmentId = this.environmentSamples[sampleIndex];
-                        getFluidColor(fluidId, environmentId, fluidDepth, this.outColor);
-                    }
-                }
-
                 this.image.data[iz * this.image.width + ix] = this.outColor.pack();
             }
         }
@@ -374,12 +381,26 @@ public class ClaimImageBuilder {
     }
 
     /**
-     * Draws owner name and trusted player names on the map tile.
-     * Text is centered and may extend beyond tile boundaries.
+     * Draws owner name on the map tile.
+     * For multi-chunk claims, renders text spanning the full claim area,
+     * with each tile rendering its portion of the total text.
+     * 
+     * Supports multiple rendering modes:
+     * - OVERFLOW: Text may extend beyond tile (vanilla-style, for large tiles)
+     * - FIT: Text uses full claim space across multiple tiles
+     * - AUTO: Automatically choose based on tile size
      *
      * @param pvpDisabled If true, shows "[Safe]" indicator
      */
     private void drawClaimText(String worldName, int chunkX, int chunkZ, boolean pvpDisabled) {
+        // Get text mode based on tile size
+        com.easyclaims.config.PluginConfig.MapTextMode textMode = 
+            EasyClaimsAccess.getMapTextMode(this.image.width, this.image.height);
+        
+        if (textMode == com.easyclaims.config.PluginConfig.MapTextMode.OFF) {
+            return;
+        }
+
         // Use display name for admin claims, otherwise owner name
         String displayName = EasyClaimsAccess.getClaimDisplayName(worldName, chunkX, chunkZ);
         List<String> trustedNames = EasyClaimsAccess.getTrustedPlayerNames(worldName, chunkX, chunkZ);
@@ -393,12 +414,25 @@ public class ClaimImageBuilder {
             displayName = displayName + " [Safe]";
         }
 
-        // Calculate vertical positioning
-        int lineHeight = BitmapFont.CHAR_HEIGHT + 2; // 7 + 2 = 9 pixels per line
-        int totalLines = 1 + Math.min(trustedNames.size(), 2); // Owner + up to 2 trusted
+        if (textMode == com.easyclaims.config.PluginConfig.MapTextMode.OVERFLOW) {
+            // Original behavior: text may extend beyond tile
+            drawTextOverflowMode(displayName, trustedNames);
+        } else {
+            // FIT mode: use full claim space across multiple tiles
+            drawTextSpanningMode(worldName, chunkX, chunkZ, displayName);
+        }
+    }
+
+    /**
+     * Draw text in OVERFLOW mode - may extend beyond tile boundaries.
+     * Used for large tiles (vanilla map style).
+     */
+    private void drawTextOverflowMode(String displayName, List<String> trustedNames) {
+        int lineHeight = BitmapFont.CHAR_HEIGHT + 2;
+        int totalLines = 1 + Math.min(trustedNames.size(), 2);
         int startY = (this.image.height - (totalLines * lineHeight)) / 2;
 
-        // Draw owner/display name (white text with black outline for crisp visibility)
+        // Draw owner/display name
         BitmapFont.drawTextCenteredWithOutline(
             this.image.data, this.image.width, this.image.height,
             displayName, startY,
@@ -420,6 +454,432 @@ public class ClaimImageBuilder {
             trustedY += lineHeight;
             trustedCount++;
         }
+    }
+
+    /**
+     * Draw text in FIT mode.
+     * 
+     * When grouping is disabled (default): Simple per-tile rendering.
+     * When grouping is enabled: Uses merged group rendering with clipping.
+     */
+    private void drawTextSpanningMode(String worldName, int chunkX, int chunkZ, String displayName) {
+        int tileWidth = this.image.width;
+        int tileHeight = this.image.height;
+        
+        // Skip tiles too small for any text
+        if (tileWidth < 12 || tileHeight < 8) {
+            return;
+        }
+        
+        int margin = 2;
+        int availWidth = tileWidth - margin * 2;
+        int availHeight = tileHeight - margin * 2;
+        
+        // Check if grouping is enabled
+        if (!EasyClaimsAccess.isMapTextGroupingEnabled()) {
+            // Simple per-tile rendering (default, stable)
+            TextFitResult fit = calculateBestFit(displayName, availWidth, availHeight);
+            renderTextWithFit(displayName, fit, tileWidth, tileHeight, 0, 0);
+            return;
+        }
+        
+        // Grouping enabled - use merged group rendering
+        int[] groupInfo = EasyClaimsAccess.getClaimGroupInfo(worldName, chunkX, chunkZ);
+        
+        if (groupInfo == null) {
+            // No group found, render locally
+            TextFitResult singleTileFit = calculateBestFit(displayName, availWidth, availHeight);
+            renderTextWithFit(displayName, singleTileFit, tileWidth, tileHeight, 0, 0);
+            return;
+        }
+        
+        int groupWidth = groupInfo[0];   // Number of tiles horizontally
+        int groupHeight = groupInfo[1];  // Number of tiles vertically
+        int posX = groupInfo[2];         // This tile's X position in group (0-indexed)
+        int posZ = groupInfo[3];         // This tile's Z position in group (0-indexed)
+        
+        // For 1x1 groups, just render locally
+        if (groupWidth == 1 && groupHeight == 1) {
+            TextFitResult singleTileFit = calculateBestFit(displayName, availWidth, availHeight);
+            renderTextWithFit(displayName, singleTileFit, tileWidth, tileHeight, 0, 0);
+            return;
+        }
+        
+        // Multi-tile group - ALL tiles render with clipping
+        // Calculate merged area dimensions
+        int mergedWidth = groupWidth * tileWidth;
+        int mergedHeight = groupHeight * tileHeight;
+        int mergedAvailWidth = mergedWidth - margin * 2;
+        int mergedAvailHeight = mergedHeight - margin * 2;
+        
+        // Calculate best fit for the merged area
+        TextFitResult mergedFit = calculateBestFit(displayName, mergedAvailWidth, mergedAvailHeight);
+        
+        // Calculate this tile's offset within the merged area
+        int offsetX = posX * tileWidth;
+        int offsetZ = posZ * tileHeight;
+        renderMergedText(displayName, mergedFit, mergedWidth, mergedHeight, 
+                         offsetX, offsetZ, tileWidth, tileHeight);
+    }
+
+    /**
+     * Result of calculating how well text fits in a given area.
+     */
+    private static class TextFitResult {
+        boolean fitsWell;       // True if text fits without truncation
+        boolean useMicro;       // True to use micro font
+        boolean vertical;       // True to use vertical orientation
+        int lines;              // Number of lines needed
+        int score;              // Fit quality score (higher = better)
+        
+        TextFitResult(boolean fitsWell, boolean useMicro, boolean vertical, int lines, int score) {
+            this.fitsWell = fitsWell;
+            this.useMicro = useMicro;
+            this.vertical = vertical;
+            this.lines = lines;
+            this.score = score;
+        }
+    }
+
+    /**
+     * Calculate the best text fit for given dimensions.
+     * Tries both fonts and both orientations, returns the best option.
+     */
+    private TextFitResult calculateBestFit(String text, int availWidth, int availHeight) {
+        TextFitResult best = null;
+        
+        // Try standard font horizontal
+        TextFitResult stdH = tryFit(text, availWidth, availHeight, false, false);
+        if (best == null || stdH.score > best.score) best = stdH;
+        
+        // Try standard font vertical
+        TextFitResult stdV = tryFit(text, availHeight, availWidth, false, true);
+        if (stdV.score > best.score) best = stdV;
+        
+        // Try micro font horizontal
+        TextFitResult microH = tryFit(text, availWidth, availHeight, true, false);
+        if (microH.score > best.score) best = microH;
+        
+        // Try micro font vertical  
+        TextFitResult microV = tryFit(text, availHeight, availWidth, true, true);
+        if (microV.score > best.score) best = microV;
+        
+        return best;
+    }
+
+    /**
+     * Try fitting text in given dimensions with specified font.
+     * Returns a fit result with quality score.
+     */
+    private TextFitResult tryFit(String text, int width, int height, boolean useMicro, boolean vertical) {
+        int charWidth = useMicro ? BitmapFont.MICRO_CHAR_WIDTH : BitmapFont.CHAR_WIDTH;
+        int charSpacing = useMicro ? BitmapFont.MICRO_CHAR_SPACING : BitmapFont.CHAR_SPACING;
+        int charHeight = useMicro ? BitmapFont.MICRO_CHAR_HEIGHT : BitmapFont.CHAR_HEIGHT;
+        int lineSpacing = useMicro ? 1 : 2;
+        
+        int fullCharWidth = charWidth + charSpacing;
+        int lineHeight = charHeight + lineSpacing;
+        
+        int textLen = text.length();
+        int singleLineWidth = textLen * fullCharWidth - charSpacing;
+        
+        // Check if single line fits
+        if (singleLineWidth <= width && charHeight <= height) {
+            // Perfect fit - single line
+            int score = 100 + (useMicro ? 0 : 10); // Prefer standard font
+            return new TextFitResult(true, useMicro, vertical, 1, score);
+        }
+        
+        // Calculate multiline fit
+        int maxCharsPerLine = Math.max(1, width / fullCharWidth);
+        int linesNeeded = (int) Math.ceil((double) textLen / maxCharsPerLine);
+        int maxLines = Math.max(1, height / lineHeight);
+        
+        if (linesNeeded <= maxLines) {
+            // Fits with multiple lines
+            int score = 80 - linesNeeded * 5 + (useMicro ? 0 : 5);
+            return new TextFitResult(true, useMicro, vertical, linesNeeded, score);
+        }
+        
+        // Doesn't fit well - will be truncated
+        int score = 20 - (linesNeeded - maxLines) * 10 + (useMicro ? 5 : 0); // Prefer micro when truncating
+        return new TextFitResult(false, useMicro, vertical, maxLines, Math.max(0, score));
+    }
+
+    /**
+     * Render text using the calculated fit result.
+     * Handles both horizontal and vertical orientations.
+     */
+    private void renderTextWithFit(String displayName, TextFitResult fit, 
+                                    int tileWidth, int tileHeight, int offsetX, int offsetZ) {
+        if (fit.vertical) {
+            renderVerticalText(displayName, fit, tileWidth, tileHeight, offsetX, offsetZ);
+        } else {
+            renderHorizontalText(displayName, fit, tileWidth, tileHeight, offsetX, offsetZ);
+        }
+    }
+
+    /**
+     * Render text horizontally (normal orientation).
+     */
+    private void renderHorizontalText(String displayName, TextFitResult fit,
+                                       int tileWidth, int tileHeight, int offsetX, int offsetZ) {
+        int margin = 2;
+        int availWidth = tileWidth - margin * 2;
+        
+        int charWidth = fit.useMicro ? BitmapFont.MICRO_CHAR_WIDTH : BitmapFont.CHAR_WIDTH;
+        int charSpacing = fit.useMicro ? BitmapFont.MICRO_CHAR_SPACING : BitmapFont.CHAR_SPACING;
+        int charHeight = fit.useMicro ? BitmapFont.MICRO_CHAR_HEIGHT : BitmapFont.CHAR_HEIGHT;
+        int lineSpacing = fit.useMicro ? 1 : 2;
+        int fullCharWidth = charWidth + charSpacing;
+        
+        // Calculate line splitting
+        String[] lines;
+        if (fit.lines == 1) {
+            lines = new String[]{displayName};
+        } else {
+            int maxCharsPerLine = Math.max(1, availWidth / fullCharWidth);
+            int actualLines = Math.min(fit.lines, (int) Math.ceil((double) displayName.length() / maxCharsPerLine));
+            lines = BitmapFont.splitBalanced(displayName, actualLines);
+        }
+        
+        // Calculate total text height and starting Y
+        int totalHeight = lines.length * charHeight + (lines.length - 1) * lineSpacing;
+        int startY = (tileHeight - totalHeight) / 2;
+        
+        // Draw each line centered
+        for (String line : lines) {
+            int lineWidth = fit.useMicro ? BitmapFont.getMicroTextWidth(line) : BitmapFont.getTextWidth(line, 1);
+            int startX = (tileWidth - lineWidth) / 2;
+            
+            // Adjust for offset (when part of merged group)
+            int localX = startX - offsetX;
+            int localY = startY - offsetZ;
+            
+            drawTextWithOutlineClipped(line, localX, localY, tileWidth, tileHeight, fit.useMicro);
+            startY += charHeight + lineSpacing;
+        }
+    }
+
+    /**
+     * Render text vertically (rotated 90 degrees, reading top-to-bottom).
+     * Each character is on its own line.
+     */
+    private void renderVerticalText(String displayName, TextFitResult fit,
+                                     int tileWidth, int tileHeight, int offsetX, int offsetZ) {
+        int charWidth = fit.useMicro ? BitmapFont.MICRO_CHAR_WIDTH : BitmapFont.CHAR_WIDTH;
+        int charHeight = fit.useMicro ? BitmapFont.MICRO_CHAR_HEIGHT : BitmapFont.CHAR_HEIGHT;
+        int charSpacing = fit.useMicro ? 1 : 2;
+        
+        // For vertical text, each character is stacked
+        int totalHeight = displayName.length() * (charHeight + charSpacing) - charSpacing;
+        int startY = (tileHeight - totalHeight) / 2;
+        int startX = (tileWidth - charWidth) / 2;
+        
+        // Adjust for offset
+        int localX = startX - offsetX;
+        int localY = startY - offsetZ;
+        
+        // Draw each character as a separate "line"
+        for (int i = 0; i < displayName.length(); i++) {
+            String charStr = String.valueOf(displayName.charAt(i));
+            drawTextWithOutlineClipped(charStr, localX, localY, tileWidth, tileHeight, fit.useMicro);
+            localY += charHeight + charSpacing;
+        }
+    }
+
+    /**
+     * Render text across a merged tile area.
+     * Only called from anchor tile.
+     */
+    private void renderMergedText(String displayName, TextFitResult fit,
+                                   int mergedWidth, int mergedHeight,
+                                   int offsetX, int offsetZ, int tileWidth, int tileHeight) {
+        if (fit.vertical) {
+            renderMergedVerticalText(displayName, fit, mergedWidth, mergedHeight, 
+                                     offsetX, offsetZ, tileWidth, tileHeight);
+        } else {
+            renderMergedHorizontalText(displayName, fit, mergedWidth, mergedHeight,
+                                       offsetX, offsetZ, tileWidth, tileHeight);
+        }
+    }
+
+    /**
+     * Render horizontal text across merged tiles.
+     */
+    private void renderMergedHorizontalText(String displayName, TextFitResult fit,
+                                             int mergedWidth, int mergedHeight,
+                                             int offsetX, int offsetZ, int tileWidth, int tileHeight) {
+        int margin = 2;
+        int availWidth = mergedWidth - margin * 2;
+        
+        int charWidth = fit.useMicro ? BitmapFont.MICRO_CHAR_WIDTH : BitmapFont.CHAR_WIDTH;
+        int charSpacing = fit.useMicro ? BitmapFont.MICRO_CHAR_SPACING : BitmapFont.CHAR_SPACING;
+        int charHeight = fit.useMicro ? BitmapFont.MICRO_CHAR_HEIGHT : BitmapFont.CHAR_HEIGHT;
+        int lineSpacing = fit.useMicro ? 1 : 2;
+        int fullCharWidth = charWidth + charSpacing;
+        
+        // Calculate line splitting
+        String[] lines;
+        if (fit.lines == 1) {
+            lines = new String[]{displayName};
+        } else {
+            int maxCharsPerLine = Math.max(1, availWidth / fullCharWidth);
+            int actualLines = Math.min(fit.lines, (int) Math.ceil((double) displayName.length() / maxCharsPerLine));
+            lines = BitmapFont.splitBalanced(displayName, actualLines);
+        }
+        
+        // Calculate total text height and starting Y in merged coordinates
+        int totalHeight = lines.length * charHeight + (lines.length - 1) * lineSpacing;
+        int mergedStartY = (mergedHeight - totalHeight) / 2;
+        
+        // Draw each line centered in merged area
+        for (String line : lines) {
+            int lineWidth = fit.useMicro ? BitmapFont.getMicroTextWidth(line) : BitmapFont.getTextWidth(line, 1);
+            int mergedStartX = (mergedWidth - lineWidth) / 2;
+            
+            // Convert to local tile coordinates
+            int localX = mergedStartX - offsetX;
+            int localY = mergedStartY - offsetZ;
+            
+            drawTextWithOutlineClipped(line, localX, localY, tileWidth, tileHeight, fit.useMicro);
+            mergedStartY += charHeight + lineSpacing;
+        }
+    }
+
+    /**
+     * Render vertical text across merged tiles.
+     */
+    private void renderMergedVerticalText(String displayName, TextFitResult fit,
+                                           int mergedWidth, int mergedHeight,
+                                           int offsetX, int offsetZ, int tileWidth, int tileHeight) {
+        int charWidth = fit.useMicro ? BitmapFont.MICRO_CHAR_WIDTH : BitmapFont.CHAR_WIDTH;
+        int charHeight = fit.useMicro ? BitmapFont.MICRO_CHAR_HEIGHT : BitmapFont.CHAR_HEIGHT;
+        int charSpacing = fit.useMicro ? 1 : 2;
+        
+        // For vertical text, each character is stacked
+        int totalHeight = displayName.length() * (charHeight + charSpacing) - charSpacing;
+        int mergedStartY = (mergedHeight - totalHeight) / 2;
+        int mergedStartX = (mergedWidth - charWidth) / 2;
+        
+        // Convert to local and draw
+        int localX = mergedStartX - offsetX;
+        int localY = mergedStartY - offsetZ;
+        
+        for (int i = 0; i < displayName.length(); i++) {
+            String charStr = String.valueOf(displayName.charAt(i));
+            drawTextWithOutlineClipped(charStr, localX, localY, tileWidth, tileHeight, fit.useMicro);
+            localY += charHeight + charSpacing;
+        }
+    }
+
+    /**
+     * Draw text with outline, clipped to the tile boundaries.
+     * Handles text that may be partially outside the visible area.
+     *
+     * @param text The text to draw
+     * @param startX Starting X in local tile coordinates (may be negative)
+     * @param startY Starting Y in local tile coordinates (may be negative)
+     * @param tileWidth Width of the tile
+     * @param tileHeight Height of the tile
+     * @param useMicro Whether to use micro font
+     */
+    private void drawTextWithOutlineClipped(String text, int startX, int startY,
+                                             int tileWidth, int tileHeight, boolean useMicro) {
+        if (text == null || text.isEmpty()) return;
+        
+        int charWidth = useMicro ? BitmapFont.MICRO_CHAR_WIDTH : BitmapFont.CHAR_WIDTH;
+        int charHeight = useMicro ? BitmapFont.MICRO_CHAR_HEIGHT : BitmapFont.CHAR_HEIGHT;
+        int charSpacing = useMicro ? BitmapFont.MICRO_CHAR_SPACING : BitmapFont.CHAR_SPACING;
+        int fullCharWidth = charWidth + charSpacing;
+        
+        // Calculate which characters are potentially visible
+        int textWidth = text.length() * fullCharWidth - charSpacing;
+        int textHeight = charHeight;
+        
+        // Early exit if text is completely outside tile (with outline margin)
+        int outlineMargin = 1;
+        if (startX + textWidth + outlineMargin < 0 || startX - outlineMargin >= tileWidth ||
+            startY + textHeight + outlineMargin < 0 || startY - outlineMargin >= tileHeight) {
+            return;
+        }
+        
+        // Draw outline first (8 directions)
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                if (dx != 0 || dy != 0) {
+                    drawTextClipped(text, startX + dx, startY + dy, tileWidth, tileHeight, 
+                                   BitmapFont.BLACK, useMicro, charWidth, charSpacing, charHeight);
+                }
+            }
+        }
+        
+        // Draw main text on top
+        drawTextClipped(text, startX, startY, tileWidth, tileHeight, 
+                       BitmapFont.WHITE, useMicro, charWidth, charSpacing, charHeight);
+    }
+
+    /**
+     * Draw text clipped to tile boundaries.
+     * Only draws pixels that fall within the tile.
+     */
+    private void drawTextClipped(String text, int startX, int startY, int tileWidth, int tileHeight,
+                                  int color, boolean useMicro, int charWidth, int charSpacing, int charHeight) {
+        int x = startX;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            
+            // Skip characters completely outside tile
+            if (x + charWidth > 0 && x < tileWidth) {
+                drawCharClipped(c, x, startY, tileWidth, tileHeight, color, useMicro, charWidth, charHeight);
+            }
+            
+            x += charWidth + charSpacing;
+            
+            // Early exit if we've passed the right edge
+            if (x >= tileWidth) break;
+        }
+    }
+
+    /**
+     * Draw a single character clipped to tile boundaries.
+     */
+    private void drawCharClipped(char c, int x, int y, int tileWidth, int tileHeight,
+                                  int color, boolean useMicro, int charWidth, int charHeight) {
+        int[] glyph = useMicro ? getMicroGlyph(c) : getStandardGlyph(c);
+        if (glyph == null) return;
+        
+        for (int row = 0; row < charHeight; row++) {
+            int py = y + row;
+            if (py < 0 || py >= tileHeight) continue;
+            
+            int rowBits = glyph[row];
+            for (int col = 0; col < charWidth; col++) {
+                int px = x + col;
+                if (px < 0 || px >= tileWidth) continue;
+                
+                boolean pixelOn = (rowBits & (1 << (charWidth - 1 - col))) != 0;
+                if (pixelOn) {
+                    this.image.data[py * tileWidth + px] = color;
+                }
+            }
+        }
+    }
+
+    /**
+     * Get glyph data for a character (standard 5x7 font).
+     */
+    private static int[] getStandardGlyph(char c) {
+        // Access via reflection-like approach or hardcode common chars
+        // For now, use a helper that matches BitmapFont's internal structure
+        return BitmapFont.getGlyph(c);
+    }
+
+    /**
+     * Get glyph data for a character (micro 3x5 font).
+     */
+    private static int[] getMicroGlyph(char c) {
+        return BitmapFont.getMicroGlyph(c);
     }
 
     private static float shadeFromHeights(int blockPixelX, int blockPixelZ, int blockPixelWidth, int blockPixelHeight,
