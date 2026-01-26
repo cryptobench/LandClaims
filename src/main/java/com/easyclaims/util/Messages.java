@@ -283,6 +283,18 @@ public class Messages {
         }
     }
 
+    public static Message claimMapVisibilityChanged(boolean visible) {
+        if (visible) {
+            return Message.raw("Claim overlays on map: VISIBLE").color(GREEN);
+        } else {
+            return Message.raw("Claim overlays on map: HIDDEN").color(YELLOW);
+        }
+    }
+
+    public static Message claimMapRefreshing() {
+        return Message.raw("Refreshing world map...").color(GRAY);
+    }
+
     public static Message bufferZoneBlocked(int bufferSize) {
         return Message.raw("Cannot claim here - too close to another player's claim! (Buffer: " + bufferSize + " chunks)").color(RED);
     }

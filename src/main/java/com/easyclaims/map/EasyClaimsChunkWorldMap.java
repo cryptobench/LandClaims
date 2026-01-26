@@ -1,21 +1,23 @@
 package com.easyclaims.map;
 
+import java.util.Collections;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+
 import com.hypixel.hytale.protocol.packets.worldmap.MapMarker;
 import com.hypixel.hytale.protocol.packets.worldmap.UpdateWorldMapSettings;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.map.WorldMap;
 import com.hypixel.hytale.server.core.universe.world.worldmap.IWorldMap;
 import com.hypixel.hytale.server.core.universe.world.worldmap.WorldMapSettings;
+
 import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongSet;
-
-import java.util.Collections;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Custom world map implementation that renders claims as colored overlays.
  * Based on SimpleClaims' SimpleClaimsChunkWorldMap.
+ * Uses settings compatible with BetterMap's defaults.
  */
 public class EasyClaimsChunkWorldMap implements IWorldMap {
 
@@ -23,6 +25,7 @@ public class EasyClaimsChunkWorldMap implements IWorldMap {
 
     @Override
     public WorldMapSettings getWorldMapSettings() {
+        // Default settings - BetterMap will override these via reflection if installed
         UpdateWorldMapSettings settingsPacket = new UpdateWorldMapSettings();
         settingsPacket.defaultScale = 128.0F;
         settingsPacket.minScale = 64.0F;

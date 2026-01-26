@@ -27,5 +27,9 @@ public class AdminSetSubcommand extends AbstractCommandCollection {
         addSubCommand(new SetMaxSubcommand(plugin));
         addSubCommand(new SetBufferSubcommand(plugin));
         addSubCommand(new SetAllowPvpToggleSubcommand(plugin));
+        addSubCommand(new SetShowClaimsOnMapSubcommand(plugin));
+        addSubCommand(new SetMapTextScaleSubcommand(plugin));
+        addSubCommand(new SetMapTextModeSubcommand(plugin));
+        addSubCommand(new SetMapTextGroupingSubcommand(plugin));
     }
 }
